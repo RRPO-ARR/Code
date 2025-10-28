@@ -8,15 +8,18 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 Q_batch_size = 1
 assert Q_batch_size == 1
 
-model_path = "/data2/Qwen/Qwen2.5-7B"
+model_path = "../data2/Qwen/Qwen2.5-3B/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b"
 beta = 0.04
 num_pre_Q = 8
 all_steps = 1000
 max_prompt_length = 400   
-save_steps = 200
+save_steps = 20
 compute_gen_logps = True
 clip_param = 0.2
 ref_server = "http://localhost:59875"
+save_dir = "00"
+os.makedirs(f"./save/{save_dir}", exist_ok=True)
+
 from ref_server import tensor_to_bytes, bytes_to_tensor, make_bytes_list, bytes_list_to_list
 
 ds_config = {
@@ -58,8 +61,10 @@ model = AutoModelForCausalLM.from_pretrained(model_path,
         torch_dtype=torch.bfloat16, _attn_implementation="sdpa")
 gen_model = model
 
-from datasets import load_dataset
-dataset = load_dataset("openai/gsm8k", "main", split="train")
+from datasets import load_dataset, load_from_disk
+# dataset = load_dataset("openai/gsm8k", "main", split="train")
+dataset = load_from_disk("../data2/datasets/gsm8k")
+dataset = dataset['train']
 QAs = [{'Q':x, 'A':y.split('####')[-1].strip()} for x,y in zip(dataset['question'], dataset['answer'])]
 
 from transformers import GenerationConfig
@@ -124,6 +129,7 @@ def generate_mode(num=10, rank=0):
     for ii in range(num):
         inputs = random.sample(QAs, Q_batch_size)
         prompt_inputs, output_ids, rewards, answers = gen_samples(inputs)
+        raw_mean = rewards.mean().item()
         if prompt_inputs is None: continue
         if rank == 0: 
             print('rewards:', rewards)
@@ -134,7 +140,7 @@ def generate_mode(num=10, rank=0):
         prompt_length = prompt_inputs.shape[1]
         Qrep = prompt_inputs.repeat(1, rep).view(-1, prompt_length)
         merged_ids = torch.cat([Qrep, output_ids], dim=1)
-        data = [json.dumps({"plen": prompt_length}).encode(), tensor_to_bytes(merged_ids), tensor_to_bytes(rewards)]       
+        data = [json.dumps({"plen": prompt_length, "rmean": raw_mean}).encode(), tensor_to_bytes(merged_ids), tensor_to_bytes(rewards)]       
 
         if compute_gen_logps:
             # Reduntant calculations? For modifiability!
@@ -206,10 +212,26 @@ for step in progress:
     while batch is None:
         generate_mode(rank=torch.distributed.get_rank())
         batch = get_batch()
+    
+    if torch.distributed.get_rank() == 0:
+        try:
+            rmean = batch.get('rmean', None)
+            if rmean is not None:
+                with open(f"./save/{save_dir}/avg_rewards.txt", "a") as f:
+                    f.write(f"{step},{avg_reward:.6f}\n")
+            print(f'step {step}, rmean: {rmean}')
+        except Exception:
+            pass
 
     loss = GRPO_step(batch)
     engine.backward(loss)
     engine.step()
+
+    # avg_reward = batch['rewards'].mean().item()  # 当前 batch 平均奖励
+
+    # if torch.distributed.get_rank() == 0:  # 只在 rank 0 写文件
+    #     with open(f"./save/{save_dir}/avg_rewards.txt", "a") as f:
+    #         f.write(f"{step},{avg_reward:.6f}\n")
 
     if torch.distributed.get_rank() == 0:
         progress.set_description(f"Loss: {loss.item():.6f}")
@@ -218,7 +240,7 @@ for step in progress:
         dist.barrier()
         if torch.distributed.get_rank() == 0:
             print('saving model')
-            save_name = f"./step_{step}"
+            save_name = f"./save/{save_dir}/step_{step}"
             state_dict = engine.module.state_dict()
             state_dict = type(state_dict)({k: v.cpu() for k, v in state_dict.items()})
             engine.module.save_pretrained(save_name, state_dict=state_dict)

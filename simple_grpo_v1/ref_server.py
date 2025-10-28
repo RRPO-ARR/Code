@@ -33,7 +33,7 @@ if __name__ == '__main__':
     import bottle, threading, queue
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-    model_path = "/data2/Qwen/Qwen2.5-7B"
+    model_path = "../data2/Qwen/Qwen2.5-3B/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b"
 
     ref_model = AutoModelForCausalLM.from_pretrained(model_path,
             torch_dtype=torch.bfloat16, _attn_implementation="sdpa").to('cuda')
@@ -75,8 +75,13 @@ if __name__ == '__main__':
         if result_queue.empty(): return b'empty'
         return result_queue.get()
     
-    def run_server(): bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
-    threading.Thread(target=run_server, daemon=False).start()
+    def run_server():
+        import asyncio
+        asyncio.set_event_loop(asyncio.new_event_loop())  # fix Tornado asyncio issue
+        bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
+
+    threading.Thread(target=run_server, daemon=True).start()
+    print("Ref server started at http://0.0.0.0:59875")
 
     while True:
         d = raw_queue.get()

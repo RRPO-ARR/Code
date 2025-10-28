@@ -1,5 +1,5 @@
 
-import json, os, shutil, re, random, io, time
+import json, os, shutil, re, random, io, time, asyncio
 import torch
 
 def tensor_to_bytes(t):
@@ -75,17 +75,26 @@ if __name__ == '__main__':
         if result_queue.empty(): return b'empty'
         return result_queue.get()
     
-    def run_server(): bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
-    threading.Thread(target=run_server, daemon=False).start()
+    def run_server():
+        asyncio.set_event_loop(asyncio.new_event_loop())  # 🔧 fix Tornado asyncio issue
+        bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
+
+    threading.Thread(target=run_server, daemon=True).start()  # ✅ 改成daemon=True防止阻塞
+    print("✅ Ref server started at http://0.0.0.0:59875")
 
     while True:
         d = raw_queue.get()
         prompt_length = d['base']['plen']
         with torch.inference_mode():
             per_token_logps = get_per_token_logps(d['inputs'].to(ref_model.device))
-        per_token_logps = per_token_logps[:,prompt_length-1:]
-        data = [json.dumps(d['base']).encode(), tensor_to_bytes(d['inputs']), 
-                tensor_to_bytes(d['rewards']), tensor_to_bytes(per_token_logps)]
-        if 'gen_logps' in d: data.append(tensor_to_bytes(d['gen_logps']))
+        per_token_logps = per_token_logps[:, prompt_length-1:]
+        data = [
+            json.dumps(d['base']).encode(),
+            tensor_to_bytes(d['inputs']),
+            tensor_to_bytes(d['rewards']),
+            tensor_to_bytes(per_token_logps)
+        ]
+        if 'gen_logps' in d:
+            data.append(tensor_to_bytes(d['gen_logps']))
         xdata = make_bytes_list(data)
         result_queue.put(xdata)

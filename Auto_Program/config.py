@@ -18,7 +18,7 @@ train_config = {
     "compute_gen_logps": True,
     "clip_param": 0.2,
     "ref_server": "http://localhost:59807",
-    "port": 59807,
+    "port": 59875,
     "wandb_key":"here is your wandb key"
 }
 
