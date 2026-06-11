@@ -1,17 +1,3 @@
-# simple_GRPO Experimental Fork
-
-This repository is an experimental fork of
-[lsdefine/simple_GRPO](https://github.com/lsdefine/simple_GRPO). The upstream
-project keeps the GRPO training loop intentionally small. This fork keeps that
-spirit and adds experiments under `simple_grpo_v1/` for:
-
-- split reference-model serving over HTTP;
-- GRPO training on GSM8K and MBPP;
-- rollout-head / adaptor-based training variants;
-- evaluation scripts for GSM8K, MATH500, MBPP, and vLLM-backed inference.
-
-The original upstream README is preserved in [origin_README.md](origin_README.md).
-
 ## Repository Layout
 
 ```text
@@ -138,6 +124,20 @@ python infer_mbpp.py --model_path ./save/39/step_100 --dataset_path /path/to/mbp
 
 `infer_gsm8k.py` and `infer_math500.py` can append a local prompt file with
 `--skill_prompt_path`.
+
+## simple_GRPO Experimental Fork
+
+This repository is an experimental fork of
+[lsdefine/simple_GRPO](https://github.com/lsdefine/simple_GRPO). The upstream
+project keeps the GRPO training loop intentionally small. This fork keeps that
+spirit and adds experiments under `simple_grpo_v1/` for:
+
+- split reference-model serving over HTTP;
+- GRPO training on GSM8K and MBPP;
+- rollout-head / adaptor-based training variants;
+- evaluation scripts for GSM8K, MATH500, MBPP, and vLLM-backed inference.
+
+The original upstream README is preserved in [origin_README.md](origin_README.md).
 
 ## Notes
 
