@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime outputs
+logs/
+*.log
+save/
+vllm_save/
+outputs/
+wandb/
+runs/
+checkpoints/
+
+# Local data and models
+data/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Editors and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+

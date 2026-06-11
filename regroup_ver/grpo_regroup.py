@@ -5,9 +5,16 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.distributed as dist
+import argparse
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-model_path = "/data2/Qwen/Qwen2.5-7B"
+parser = argparse.ArgumentParser(description="Regroup GRPO training")
+parser.add_argument("--model_path", required=True)
+parser.add_argument("--ref_server", default="http://localhost:59875")
+parser.add_argument("--local_rank", type=int, default=-1)
+args = parser.parse_args()
+
+model_path = args.model_path
 beta = 0.04
 num_pre_Q = 8
 Q_batch_size = 1
@@ -38,7 +45,7 @@ ds_config = {
     }
 }
 
-ref_server = "http://localhost:59875"
+ref_server = args.ref_server
 from ref_server import tensor_to_bytes, bytes_to_tensor, make_bytes_list, bytes_list_to_list
 
 def get_batch():

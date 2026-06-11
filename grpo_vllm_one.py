@@ -6,10 +6,20 @@ import numpy as np
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from tqdm import tqdm
+import argparse
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-model_path = "./data2/Qwen/Qwen2.5-3B/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b"
-gen_device = 4    # GPU device for generation, don't put it in CUDA_VISIBLE_DEVICES
+parser = argparse.ArgumentParser(description="Simple GRPO training with vLLM generation")
+parser.add_argument("--model_path", required=True)
+parser.add_argument("--dataset_path", required=True, help="Path to a local GSM8K dataset saved with datasets.save_to_disk")
+parser.add_argument("--gen_device", type=int, required=True, help="Physical GPU id used by the vLLM generation worker")
+parser.add_argument("--ref_server", default="http://localhost:59875")
+parser.add_argument("--output_dir", default=".")
+args = parser.parse_args()
+
+model_path = args.model_path
+dataset_path = args.dataset_path
+gen_device = args.gen_device    # GPU device for generation, don't put it in CUDA_VISIBLE_DEVICES
 beta = 0.04
 all_steps = 1000
 Q_batch_size = 5
@@ -19,7 +29,7 @@ gen_update_steps = 16
 save_steps = 200
 compute_gen_logps = True
 clip_param = 0.2
-ref_server = "http://localhost:59875"
+ref_server = args.ref_server
 from ref_server import tensor_to_bytes, bytes_to_tensor, make_bytes_list, bytes_list_to_list
 
 ds_config = {
@@ -95,14 +105,16 @@ def gen_worker(Q, physics_device):
     torch.cuda.set_device(0)
     print(f"Generation worker process uses GPU {physics_device}")
     from vllm import LLM, SamplingParams
-    vllm_gen = LLM(model=model_path, gpu_memory_utilization=0.5)
+    vllm_gen = LLM(model=model_path, gpu_memory_utilization=0.5, temperature=0.9, num_return_sequences=8)
     ref_server_ver = 'tensor'  # don't worry, it will auto switch based on the first upload
 
     sampling_params = SamplingParams(n=num_pre_Q, temperature=0.9, max_tokens=700)
     gen_logps_sp = SamplingParams(temperature=0, top_p=1, max_tokens=1, prompt_logprobs=1)
 
-    from datasets import load_dataset
-    dataset = load_dataset("openai/gsm8k", "main", split="train")
+    from datasets import load_dataset, load_from_disk
+    # dataset = load_dataset("openai/gsm8k", "main", split="train")
+    dataset = load_from_disk(dataset_path)
+    dataset = dataset['train']
     QAs = [{'Q':x, 'A':y.split('####')[-1].strip()} for x,y in zip(dataset['question'], dataset['answer'])]
     
     system_prompt = """You are a helpful assistant. A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The Assistant first thinks about the reasoning process in the mind and then provides the user with the answer.\
@@ -251,7 +263,8 @@ if __name__ == '__main__':
             dist.barrier()
             if dist.get_rank() == 0:
                 print('saving model')
-                save_name = f"./step_{step}"
+                save_name = os.path.join(args.output_dir, f"step_{step}")
+                os.makedirs(args.output_dir, exist_ok=True)
                 state_dict = engine.module.state_dict()
                 state_dict = type(state_dict)({k: v.cpu() for k, v in state_dict.items()})
                 engine.module.save_pretrained(save_name, state_dict=state_dict)

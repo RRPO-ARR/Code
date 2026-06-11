@@ -1,6 +1,9 @@
+import os
+
 base_config={
-  "model_path": "/mnt/remote-data/downloads/models/Qwen/Qwen2-7B",
-  "gen_device": "1", # GPU device for generation, don't put it in CUDA_VISIBLE_DEVICES
+  "model_path": os.environ.get("MODEL_PATH", "Qwen/Qwen2-7B"),
+  "data_path": os.environ.get("DATA_PATH", ""),
+  "gen_device": os.environ.get("GEN_DEVICE", "1"), # GPU device for generation, don't put it in CUDA_VISIBLE_DEVICES
   "train_gpu_num": 2, # Number of GPUs used for training
   "train_batch_size": 4,
   "beta": 0.01,

@@ -57,6 +57,7 @@ class QAPool:
             time.sleep(5)
 
 if __name__ == '__main__':   
+    import argparse
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import torch
     import torch.nn as nn
@@ -65,7 +66,13 @@ if __name__ == '__main__':
     import bottle, threading, queue
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-    model_path = "/data2/Qwen/Qwen2.5-7B"
+    parser = argparse.ArgumentParser(description="Regroup reference server")
+    parser.add_argument("--model_path", required=True)
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=59875)
+    args = parser.parse_args()
+
+    model_path = args.model_path
 
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     ref_model = AutoModelForCausalLM.from_pretrained(model_path,
@@ -105,7 +112,7 @@ if __name__ == '__main__':
         if result_queue.empty(): return b'empty'
         return result_queue.get()
 
-    def run_server(): bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
+    def run_server(): bottle.run(app, host=args.host, port=args.port, server='tornado')
     threading.Thread(target=run_server, daemon=False).start()
 
     gen = pool.sample_group()

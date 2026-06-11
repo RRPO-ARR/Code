@@ -25,6 +25,7 @@ def bytes_list_to_list(b):
     return blist
 
 if __name__ == '__main__':   
+    import argparse
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import torch
     import torch.nn as nn
@@ -33,7 +34,13 @@ if __name__ == '__main__':
     import bottle, threading, queue
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-    model_path = "/data2/Qwen/Qwen2.5-7B"
+    parser = argparse.ArgumentParser(description="Reference model HTTP server")
+    parser.add_argument("--model_path", required=True, help="Path or Hugging Face id of the reference model")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=59875)
+    args = parser.parse_args()
+
+    model_path = args.model_path
 
     ref_model = AutoModelForCausalLM.from_pretrained(model_path,
             torch_dtype=torch.bfloat16, _attn_implementation="sdpa").to('cuda')
@@ -77,7 +84,7 @@ if __name__ == '__main__':
     
     def run_server():
         asyncio.set_event_loop(asyncio.new_event_loop())  # 🔧 fix Tornado asyncio issue
-        bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
+        bottle.run(app, host=args.host, port=args.port, server='tornado')
 
     threading.Thread(target=run_server, daemon=True).start()  # ✅ 改成daemon=True防止阻塞
     print("✅ Ref server started at http://0.0.0.0:59875")

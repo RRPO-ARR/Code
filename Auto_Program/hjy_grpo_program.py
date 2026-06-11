@@ -108,7 +108,6 @@ def gen_worker(Q, physics_device):
     #sampling_params = SamplingParams(n=num_pre_Q, temperature=0.9, max_tokens=600)
     gen_logps_sp = SamplingParams(temperature=0, top_p=1, max_tokens=1, prompt_logprobs=1)
 
-    # data_path = "/mnt/remote-data/hjy/public_code/GRPO/data/gsm8k_train.json"
     data_path = train_config['data_path']
     with open(data_path, 'r', encoding='utf-8') as file:
         dataset = json.load(file)

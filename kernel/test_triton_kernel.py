@@ -4,14 +4,20 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.distributed as dist
+import argparse
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-model_path = "/data2/Qwen/Qwen2.5-7B"
+parser = argparse.ArgumentParser(description="Test optional Triton GRPO loss kernel")
+parser.add_argument("--model_path", required=True)
+parser.add_argument("--ref_server", default="http://localhost:59875")
+args = parser.parse_args()
+
+model_path = args.model_path
 beta = 0.04
 num_pre_Q = 8
 Q_batch_size = 1
 
-ref_server = "http://localhost:59875"
+ref_server = args.ref_server
 
 def bytes_to_tensor(b):
     return torch.load(io.BytesIO(b))

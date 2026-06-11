@@ -25,6 +25,7 @@ def bytes_list_to_list(b):
     return blist
 
 if __name__ == '__main__':   
+    import argparse
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import torch
     import torch.nn as nn
@@ -33,7 +34,13 @@ if __name__ == '__main__':
     import bottle, threading, queue
     os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
-    model_path = "../data2/Qwen/Qwen2.5-3B/models--Qwen--Qwen2.5-3B/snapshots/3aab1f1954e9cc14eb9509a215f9e5ca08227a9b"
+    parser = argparse.ArgumentParser(description="Reference model HTTP server")
+    parser.add_argument("--model_path", required=True, help="Path or Hugging Face id of the reference model")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=59875)
+    args = parser.parse_args()
+
+    model_path = args.model_path
 
     ref_model = AutoModelForCausalLM.from_pretrained(model_path,
             torch_dtype=torch.bfloat16, _attn_implementation="sdpa").to('cuda')
@@ -58,15 +65,19 @@ if __name__ == '__main__':
 
     @app.route('/upload', method='POST')
     def do_upload():
+        # raw = request.body.read()
+        # print("RAW GOT:", len(raw), raw[:50])
         dd = request.body.read()
         dd = bytes_list_to_list(dd)
-        if len(dd) not in (3,4): return b'tensor'
+        # if len(dd) not in (3,5): return b'tensor'
+        print(len(dd))
         data = {'base': json.loads(dd[0])} 
         data['inputs'] = bytes_to_tensor(dd[1])
         data['rewards'] = bytes_to_tensor(dd[2])
-        if len(dd) == 4: data['gen_logps'] = bytes_to_tensor(dd[3])
+        if len(dd) >= 4: data['gen_logps'] = bytes_to_tensor(dd[3])
+        if len(dd) == 5: data['a_gen_logps'] = bytes_to_tensor(dd[4])
         raw_queue.put(data)
-        print('receive', data['inputs'].shape, data['rewards'], 
+        print('receive', data['base'], data['inputs'].shape, data['rewards'], 
               data['gen_logps'].shape if 'gen_logps' in data else '')
         return b'tensor'
 
@@ -78,10 +89,10 @@ if __name__ == '__main__':
     def run_server():
         import asyncio
         asyncio.set_event_loop(asyncio.new_event_loop())  # fix Tornado asyncio issue
-        bottle.run(app, host='0.0.0.0', port=59875, server='tornado')
+        bottle.run(app, host=args.host, port=args.port, server='tornado')
 
     threading.Thread(target=run_server, daemon=True).start()
-    print("Ref server started at http://0.0.0.0:59875")
+    print(f"Ref server started at http://{args.host}:{args.port}")
 
     while True:
         d = raw_queue.get()
@@ -92,6 +103,7 @@ if __name__ == '__main__':
         data = [json.dumps(d['base']).encode(), tensor_to_bytes(d['inputs']), 
                 tensor_to_bytes(d['rewards']), tensor_to_bytes(per_token_logps)]
         if 'gen_logps' in d: data.append(tensor_to_bytes(d['gen_logps']))
+        if 'a_gen_logps' in d: data.append(tensor_to_bytes(d['a_gen_logps']))
         xdata = make_bytes_list(data)
         result_queue.put(xdata)
 

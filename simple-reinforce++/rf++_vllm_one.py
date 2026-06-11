@@ -82,12 +82,9 @@ def gen_worker(Q, physics_device):
     sampling_params = SamplingParams(n=num_pre_Q, temperature=0.7, max_tokens=650)
     gen_logps_sp = SamplingParams(temperature=0, top_p=1, max_tokens=1, prompt_logprobs=1)
 
-    # from datasets import load_dataset
-    # data_path = "/mnt/remote-data/hjy/public_code/GRPO/data/gsm8k_train.json"
-    # with open(data_path, 'r', encoding='utf-8') as file:
-    #     dataset = json.load(file)
-    # QAs = [{'Q': item['question'], 'A': item['answer_only']} for item in dataset]
-    data_path = "/mnt/remote-data/hjy/data/o1/math/train/MATH_train-cleaned_processed.json"
+    data_path = base_config["data_path"]
+    if not data_path:
+        raise ValueError("Set DATA_PATH or base_config['data_path'] to a JSON training file")
     with open(data_path, 'r', encoding='utf-8') as file:
         dataset = json.load(file)
     QAs = [{'Q': item['question'], 'A': item['answer_detail']} for item in dataset]
